@@ -1,0 +1,26 @@
+#######################################
+# Syntax Coloring Map for Streaming
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+Base40       KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+decode	KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+
+#MESSAGE_HEADR_ID    LITERAL1
+# NOT A CONSTANT
+
+#PAYLOAD				LITERAL1
+_base40	LITERAL1
+_results LITERAL1

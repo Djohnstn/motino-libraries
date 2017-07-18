@@ -1,0 +1,46 @@
+#######################################
+# Syntax Coloring Map for Streaming
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+ShortPacket       KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+ENTRY_NAME    KEYWORD2
+ENTRY_POWER   KEYWORD2
+ENTRY_TYPES   KEYWORD2
+#_BIN    KEYWORD2
+#_BYTE   KEYWORD2
+
+firstPacket 	KEYWORD2
+nextPacket	 	KEYWORD2
+miniPacketName 	KEYWORD2
+miniPacketType 	KEYWORD2
+miniPacketLength KEYWORD2
+
+miniPacketValue_c KEYWORD2
+miniPacketValue_i KEYWORD2
+miniPacketValue_L KEYWORD2
+
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+
+MESSAGE_HEADR_ID    LITERAL1
+MESSAGE_TRAIL_ID	LITERAL1
+MESSAGE_MAX_LENGTH	LITERAL1
+MESSAGE_MAX_DATA	LITERAL1
+
+# NOT A CONSTANT
+
+PAYLOAD				LITERAL1
+
+sessionidnum		LITERAL1
+messageidnum		LITERAL1

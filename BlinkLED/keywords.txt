@@ -1,0 +1,29 @@
+#######################################
+# Syntax Coloring Map for Streaming
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+#Base40       KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+BlinkOn	KEYWORD2
+BlinkOff	KEYWORD2
+Blink	KEYWORD2
+BlinkEvery KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+
+#MESSAGE_HEADR_ID    LITERAL1
+# NOT A CONSTANT
+
+#PAYLOAD				LITERAL1
+_PIN	LITERAL1
+#_results LITERAL1

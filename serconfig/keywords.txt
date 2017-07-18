@@ -1,0 +1,3 @@
+serconfig	KEYWORD1
+settingsCommand	KEYWORD2
+
