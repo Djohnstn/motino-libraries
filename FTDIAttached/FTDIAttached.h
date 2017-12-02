@@ -16,9 +16,15 @@ class FTDIAttached
 		FTDIAttached();
 		bool Attached();
 		
-	private:
-		bool _Attached; // is the FTDI attached? assume not.
+	//private:
+		bool _Attached; // is the FTDI attached? assume not. // allow direct access?
 
 };
+
+// #define IFECHO if (comport.Attached())
+// #define IFNOECHO if (!comport.Attached())
+#define IFECHO if (comport._Attached)
+#define IFNOECHO if (!comport._Attached)
+
 #endif
 

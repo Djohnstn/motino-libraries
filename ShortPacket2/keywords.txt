@@ -23,6 +23,8 @@ nextPacket	 	KEYWORD2
 miniPacketName 	KEYWORD2
 miniPacketType 	KEYWORD2
 miniPacketLength KEYWORD2
+miniPacketDataLength KEYWORD2
+Scale KEYWORD2
 
 miniPacketValue_c KEYWORD2
 miniPacketValue_i KEYWORD2

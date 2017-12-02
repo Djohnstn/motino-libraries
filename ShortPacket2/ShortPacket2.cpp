@@ -12,7 +12,8 @@
 #include "SipHash_2_4.h"
 
 #define IFECHO if(_verbose)
-const byte fox2 = 0xff;
+const byte foxfox = 0xff;
+const char fox0 = 0xf0;
 
 unsigned long ShortPacket2::SipTOTP(uint8_t phmacKey[], char* structure, int structurelength) {
 	// debug - dump first 3 bytes of key -- looks good
@@ -52,11 +53,20 @@ void ShortPacket2::SpSetVerbose(bool verbosity) {
 	_verbose = verbosity;
 }
 
+// is the packet full?
+bool ShortPacket2::Full(signed char newdata) {
+	//if (_full) return _full;
+	if (sPayload.len + newdata >= MESSAGE_MAX_DATA) _full = true;
+	return _full;
+}
+
 // call this first to set up radio payload
 bool ShortPacket2::Begin(unsigned long time) {
 	_time = time;
 	sPayload.type = MESSAGE_HEADR_ID; // header
 	traffic_IX = 0;    // nothing to send
+	_scale = 0;			// scale is reset to zero
+	_full = false;
 	sPayload.len = traffic_IX;	// mark the packet
 	sPayload.nonceSum = (unsigned long)nonce << 22; // keep session number
 	unsigned long packettime = ((_time >> 5) & 0x3fffffUL);
@@ -72,12 +82,12 @@ bool ShortPacket2::Begin(unsigned long time) {
 // LONG values
 bool ShortPacket2::Add_L(char payload_name, long payload_value) {
   bool bAccepted = false;
-  if (traffic_IX < MESSAGE_MAX_DATA - 5) {
+  if (!Full(5)) {
     sPayload.body[traffic_IX++] = ((char) payload_name << 2) + ((char) 0x2);
-    sPayload.body[traffic_IX++] = (payload_value >> 24) & fox2;   // top part1?
-    sPayload.body[traffic_IX++] = (payload_value >> 16) & fox2;   // top part2?
-    sPayload.body[traffic_IX++] = (payload_value >> 8) & fox2;    // top part3?
-    sPayload.body[traffic_IX++] = payload_value & fox2;        // bottom part?
+    sPayload.body[traffic_IX++] = (payload_value >> 24); // & foxfox;   // top part1?
+    sPayload.body[traffic_IX++] = (payload_value >> 16); // & foxfox;   // top part2?
+    sPayload.body[traffic_IX++] = (payload_value >> 8); // & foxfox;    // top part3?
+    sPayload.body[traffic_IX++] = payload_value; // & foxfox;        // bottom part?
     sPayload.len = traffic_IX;
     bAccepted = true;
   }
@@ -87,10 +97,11 @@ bool ShortPacket2::Add_L(char payload_name, long payload_value) {
 // INT values
 bool ShortPacket2::Add_i(char payload_name, int payload_value) {
   bool bAccepted = false;
-  if (traffic_IX < MESSAGE_MAX_DATA - 3) {
-    sPayload.body[traffic_IX++] = ((char) payload_name << 2) + ((char) 0x1);
-    sPayload.body[traffic_IX++] = payload_value / 256;    // top part?
-    sPayload.body[traffic_IX++] = payload_value & fox2;   // bottom part?
+  byte top = payload_value >> 8;	// top half of integer, if zero then compress it out
+  if (!Full(3)) {
+    sPayload.body[traffic_IX++] = ((char) payload_name << 2) + (top?1:0); //((char) 0x1);
+    if (top) sPayload.body[traffic_IX++] = top;    // top part only if non-zero?
+    sPayload.body[traffic_IX++] = payload_value; // & foxfox;   // bottom part?
     sPayload.len = traffic_IX;
     bAccepted = true;
   }
@@ -102,7 +113,7 @@ bool ShortPacket2::Add_i(char payload_name, int payload_value) {
 // BYTE values
 bool ShortPacket2::Add_c(char payload_name, char payload_value) {
   bool bAccepted = false;
-  if (traffic_IX < MESSAGE_MAX_DATA - 2) {
+  if (!Full(2)) {
     sPayload.body[traffic_IX++] = ((char) payload_name << 2) + ((char) 0x0);
     sPayload.body[traffic_IX++] = payload_value;   // only part
     sPayload.len = traffic_IX;
@@ -113,53 +124,90 @@ bool ShortPacket2::Add_c(char payload_name, char payload_value) {
   return bAccepted;
 }
 
+// Tag-Only values - scale
+bool ShortPacket2::Add_E(char payload_scale) {
+  bool bAccepted = false;
+  if (_scale == payload_scale) {
+	bAccepted = true;		// if packet has this scaling already, no need to repeat it
+  }
+  else {
+	if (!Full(1)) {
+		sPayload.body[traffic_IX++] = ((char) fox0 | payload_scale);	// need bitwise OR to put bits IN
+		sPayload.len = traffic_IX;
+		_scale = payload_scale;
+		bAccepted = true;
+	}
+	else { // won't fit!
+	}
+  }
+  return bAccepted;
+}
+
 unsigned long ShortPacket2::Time() {	// return the current time
 		return _time;
 } 
 
 bool ShortPacket2::AddTime(unsigned long time) {				// add whatever part of time is changed
+	bool rc = false;
+	Serial.print(time, HEX);
 	if (time == _time) {
-		return true;					// already on this time, don't add any data
+		Serial.print(F(" t==_t;"));
+		rc = true;					// already on this time, don't add any data
 	} 
 	else {
-		int tmtop = time >> 16;
+		int tmtop = time >> 16;			// check if top 16 bits are same
 		int _tmtop = _time >> 16;
 		if (tmtop == _tmtop) {
-			char tmshift = time >> 8; 	//keep bits 17-23
+			char tmshift = time >> 8; 				// check bits 17-23
 			char _tmshift = _time >> 8;
 			if (tmshift == _tmshift) {				// send only last byte of time
+				Serial.print(F(" t2; "));
 				char t2 = time;
 				_time = time;
-				return Add_c(1, t2);	// add the last byte of time
+				rc = Add_c(1, t2);	// add the last byte of time
 			}
 			else {									// send only last two bytes of time
+				Serial.print(F(" t3; "));
 				int t3 = time;
 				_time = time;
-				return Add_i(1, t3);	// add the last two bytes of time
+				rc = Add_i(1, t3);	// add the last two bytes of time
 			}
 		}
 		else {
 			_time = time;
-			return Add_L(1, time);	// add the full time
+			Serial.print(F(" t; "));
+			rc = Add_L(1, time);	// add the full time
 		}
 	}
+	Serial.print(F(" ?"));
+	Serial.print(rc);
+	Serial.print(F("; "));
+	return rc;
 }
 
-bool ShortPacket2::Add(unsigned long time, char payload_name, unsigned long payload_value) {
-	if (AddTime(time)) return Add_L(payload_name, payload_value);
-	return false;
+bool ShortPacket2::Add(unsigned long time, char payload_name, unsigned long payload_value, char scale) {
+	Serial << F("+UL");
+	if (!Add_E(scale)) return false;
+	if (!AddTime(time)) return false;
+	return Add_L(payload_name, payload_value);
 }
-bool ShortPacket2::Add(unsigned long time, char payload_name, long payload_value) {
-	if (AddTime(time)) return Add_L(payload_name, payload_value);
-	return false;
+bool ShortPacket2::Add(unsigned long time, char payload_name, long payload_value, char scale) {
+	Serial << F("+L");
+	if (!Add_E(scale)) return false;
+	if (!AddTime(time)) return false;
+	return Add_L(payload_name, payload_value);
 }
-bool ShortPacket2::Add(unsigned long time, char payload_name, int payload_value) {
-	if (AddTime(time)) return Add_i(payload_name, payload_value);
-	return false;
+bool ShortPacket2::Add(unsigned long time, char payload_name, int payload_value, char scale) {
+	Serial << F("+I");
+	if (!Add_E(scale)) return false;
+	if (!AddTime(time)) return false;
+	return Add_i(payload_name, payload_value);
 }
-bool ShortPacket2::Add(unsigned long time, char payload_name, char payload_value) {
-	if (AddTime(time)) return Add_c(payload_name, payload_value);
-	return false;
+bool ShortPacket2::Add(unsigned long time, char payload_name, char payload_value, char scale) {
+	Serial << F("+C");
+	if (!Add_E(scale)) return false;
+	if (!AddTime(time)) return false;
+	return Add_c(payload_name, payload_value);
 }
 
   // finalize the payload packet
@@ -180,12 +228,12 @@ bool ShortPacket2::Close(uint8_t hmacKey[]) {
 void ShortPacket2::SerialDisplay() {
 	if (!_verbose) return;	// bail if not verbose
 	// header
-    Serial 	<< F("{: '") << (sPayload.type) << F("' ") 
+    Serial 	<< F("# {'") << (sPayload.type) << F("' ") 
 			<< (int)(sPayload.nonceSum >> 22) << F(".") 
 			<< _HEX(sPayload.nonceSum & 0x3fffff) << F(" (") << sPayload.len << F(")$");
 	// data 
     for(byte i = 0; i < min(sPayload.len, min(traffic_IX, MESSAGE_MAX_DATA)); i++)
-        Serial << (sPayload.body[i]<16 ? "0" : "") << _HEX((unsigned char)sPayload.body[i]) << ( i < traffic_IX-1 ? ":" : "$");
+        Serial << (sPayload.body[i]<16 ? "0" : "") << _HEX((unsigned char)sPayload.body[i]) << ( i < traffic_IX-1 ? ':' : '$');
 	// trailer
 	Serial << F("}\n");	// end packet print
 }
@@ -207,6 +255,8 @@ byte* ShortPacket2::Data() {
 
 // copy payload from receive buffer to data buffer
 byte ShortPacket2::setPayload(const void* Data, int dataLen) {
+	_scale = 0;		// reset payload minipacket scale for new packet being loaded
+	_full = false;
 	if (dataLen <= 64) {
 	    memcpy(&sPayload, Data, dataLen);
 		traffic_IX = dataLen - MESSAGE_HDR_LENGTH;
@@ -220,32 +270,60 @@ byte ShortPacket2::setPayload(const void* Data, int dataLen) {
 }
 
 // get attribute of minipacket 
+char ShortPacket2::Scale() {
+	return _scale;
+}
+
+// get attribute of minipacket 
 byte ShortPacket2::miniPacketName(byte index) {
-	return sPayload.body[index] >> 2;
+	//Serial.print(" N:x"); Serial.print(sPayload.body[index], HEX);
+	byte tag = sPayload.body[index] >> 2;
+	char scaleValue = sPayload.body[index] & fox0;
+	//Serial.print(" mpnScale:"); Serial.print (scaleValue, HEX); Serial.print(" ");
+	if (scaleValue == fox0) {
+		tag = 0;
+	}
+	//Serial.print(" _M"); Serial.print(tag, DEC); Serial.print(":");
+	return tag;
 }
 
 // get length of current payload object
 byte ShortPacket2::miniPacketDataLength(byte index) {
-	byte packedLength = sPayload.body[index] & 0x3;
 	byte thislength;
-	switch (packedLength) {		// mask off low 2 bits of entry power
-		case 0:      // 1 byte
-			thislength = 1;
-			break;
-		case 1:		// 2 byte
-			thislength = 2;
-			break;
-		case 2:		// 4 byte
-			thislength = 4;
-			break;
-		default:
-			thislength = fox2;		// gotta do something?
+	//Serial.print(" (L x"); Serial.print(sPayload.body[index], HEX);
+	char scaleValue = sPayload.body[index] & fox0;
+	//Serial.print(" mpLScale:"); Serial.print (scaleValue, HEX); Serial.print(" ");
+	if (scaleValue == fox0) {
+		_scale = sPayload.body[index] & 0x0F;
+		//Serial.print (" E"); Serial.print (_scale, DEC);
+		if (_scale & 0x08) _scale |= fox0;	// if negative power, sign extend it - use OR dummy!
+		//Serial.print (" => "); Serial.print (_scale, DEC);		// finally fixed.
+		thislength = 0;
 	}
+	else {
+		byte packedLength = sPayload.body[index] & 0x3;
+		switch (packedLength) {		// mask off low 2 bits of entry power
+			case 0:      // 1 byte
+				thislength = 1;
+				break;
+			case 1:		// 2 byte
+				thislength = 2;
+				break;
+			case 2:		// 4 byte
+				thislength = 4;
+				break;
+			default:
+				thislength = foxfox;		// gotta do something?
+		}
+	}
+	//Serial.print(" L:"); Serial.print(thislength, DEC); Serial.print(")\n");
 	return thislength;
 }
 
 byte ShortPacket2::firstPacket() {
-	if(sPayload.type != '=') return fox2; // bad packet = no data!
+	_scale = 0;			// scale is reset to zero whenever we restart the packet processing
+	_full = false;
+	if(sPayload.type != '=') return foxfox; // bad packet = no data!
 	return 0; // address of first packet
 }
 
@@ -254,14 +332,15 @@ byte ShortPacket2::nextPacket(byte mp) {
 	byte thislength = miniPacketDataLength(ix);
     if( ix < traffic_IX-1) {
 	}
-	if (thislength == fox2 || thislength == 0) {
-		ix = fox2;
+	if (thislength == foxfox) { // careful, this could bite us! || thislength == 0) {
+		ix = foxfox;
 	}
 	else {
 		ix += thislength + 1;						// point to next 
 	}
-	if (ix >= sPayload.len) ix = fox2;				// past eof
-	if (ix >= MESSAGE_MAX_DATA) ix = fox2;			// past eof
+	if (ix >= sPayload.len) ix = foxfox;				// past eof
+	if (ix >= MESSAGE_MAX_DATA) ix = foxfox;			// past eof
+	//Serial.print(" next:"); Serial.print(ix, DEC);
 	return ix;
 }
 
@@ -273,7 +352,7 @@ byte ShortPacket2::minipacketIX(byte tag) {
 	temptag = miniPacketName(ix);
     while( temptag != tag && ix < traffic_IX-1) {
 		thislength = miniPacketDataLength(ix);
-		if (thislength == fox2) {
+		if (thislength == foxfox) {
 			ix = traffic_IX; // bad packet, quit searching
 		}
 		else {
@@ -299,7 +378,7 @@ byte ShortPacket2::miniPacketValue_c(byte packetIX) {
 		return thisValue;
 	}
 	else {
-		return fox2;
+		return foxfox;
 	}
 }
 
@@ -364,8 +443,8 @@ ShortPacket2::status ShortPacket2::validPayload(unsigned long time, uint8_t hmac
     traffic_IX = sPayload.len;
 	// find time
 	byte ixtime = minipacketIX(2);	// 2 is a time tag - supposed to be full 4 byte size
-	if (ixtime == fox2)	ixtime = minipacketIX(1);	// 1 is a compressed time tag
-	if (ixtime == fox2) {					// if no time code, this isn't a good packet
+	if (ixtime == foxfox)	ixtime = minipacketIX(1);	// 1 is a compressed time tag
+	if (ixtime == foxfox) {					// if no time code, this isn't a good packet
 		sPayload.len = 0;					//IFECHO Serial << F("*no time code*");  return false;
 		return status::NoTimeCode;
 	}

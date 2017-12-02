@@ -35,7 +35,9 @@ class ShortPacket2 {
 	unsigned long _time;
 	unsigned long nonce;
 	char traffic_IX = 0;  // 0th position is zeroth in array, max of 57
+	char _scale;	// current scale of data values  (1E^(n))eg: -3 = *1E-3  
 	bool _verbose = false;
+	bool _full;
 	const char MESSAGE_HEADR_ID = '='; // #[ - message type id number / socket
 
 	// enable serial output
@@ -48,15 +50,18 @@ class ShortPacket2 {
 	bool Begin(unsigned long time);
 	
 	// Add a new value	--- long, int, or byte
-	bool Add(unsigned long time, char payload_name, unsigned long payload_value);
-	bool Add(unsigned long time, char payload_name, long payload_value);
-	bool Add(unsigned long time, char payload_name, int  payload_value);
-	bool Add(unsigned long time, char payload_name, char payload_value);
+	bool Add(unsigned long time, char payload_name, unsigned long payload_value, char scale);
+	bool Add(unsigned long time, char payload_name, long payload_value, char scale);
+	bool Add(unsigned long time, char payload_name, int  payload_value, char scale);
+	bool Add(unsigned long time, char payload_name, char payload_value, char scale);
 	
 
 	// finalize the packet
 	bool Close(uint8_t phmacKey[]);
 
+	// is the packet full if we add this much data?
+	bool Full(signed char newdata);
+	
 	// print the packet
 	void SerialDisplay();
 
@@ -78,6 +83,7 @@ class ShortPacket2 {
 
 	// packet time
 	unsigned long Time();	// return the current time
+	char Scale();		// current scale
 
 	// minipacket extractors
 
@@ -100,6 +106,7 @@ class ShortPacket2 {
 	bool Add_L(char payload_name, long payload_value);				// internal handles
 	bool Add_i(char payload_name, int payload_value);
 	bool Add_c(char payload_name, char payload_value);
+	bool Add_E(char payload_scale);					// scale / scale 1E^(n)
 	union timebyte {
 		unsigned long integer;
 		unsigned char byt[sizeof(long)];
